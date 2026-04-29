@@ -65,11 +65,18 @@ tier (Pro / Max 5x / Max 20x) is fetched automatically from
 `/api/oauth/profile` and re-checked every 3 hours so plan changes show up
 on the dashboard without manual intervention.
 
-## Touch
+## Controls
 
-- **Tap** — next account
-- **Long press 3 s** — factory reset (clears WiFi + all accounts)
-  Hold prompt appears after 0.5 s; release before 3 s to cancel.
+**Display (touch):**
+
+- **Tap** — switch to next account
+- **Long press 3 s** — toggle auto-cycle ON/OFF (overlay shows "Hold to toggle cycle" with countdown; release before 3 s to cancel)
+
+**BOOT button (the small button on the board, GPIO9 — next to the USB-C, not RST):**
+
+- **Long press 4 s** — factory reset (clears WiFi + all accounts; overlay shows "Hold for factory reset" countdown; release before 4 s to cancel)
+
+The destructive action lives on the hardware button (not the screen) so a stray palm on the display can't wipe the device.
 
 ## Auto-cycle
 

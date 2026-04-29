@@ -20,6 +20,7 @@
 #include "app_display.h"
 #include "app_touch.h"
 #include "app_sleep.h"
+#include "app_button.h"
 #include "ui_dashboard.h"
 #include "ui_setup.h"
 
@@ -94,16 +95,43 @@ static void on_touch(app_touch_event_t evt, uint32_t hold_ms, void *user)
             app_display_unlock();
         }
         break;
-    case APP_TOUCH_LONG_PRESS_FIRED:
-        ESP_LOGW(TAG, "Long press fired — factory reset");
+    case APP_TOUCH_LONG_PRESS_FIRED: {
+        bool was = app_config_get_cycle_enabled();
+        app_config_set_cycle(!was, app_config_get_cycle_interval());
+        ESP_LOGW(TAG, "Long press fired — cycle %s", was ? "OFF" : "ON");
         if (app_display_lock(100)) {
-            ui_dashboard_show_error("Factory reset");
+            ui_dashboard_hide_long_press();
+            ui_dashboard_show_error(was ? "Auto-cycle OFF" : "Auto-cycle ON");
             app_display_unlock();
         }
-        vTaskDelay(pdMS_TO_TICKS(700));
-        app_config_factory_reset();
+        vTaskDelay(pdMS_TO_TICKS(800));
+        if (app_display_lock(100)) {
+            ui_dashboard_hide_overlay();
+            app_display_unlock();
+        }
         break;
     }
+    }
+}
+
+
+/* ------------------------------------------------------------------ */
+/* BOOT button → factory reset                                         */
+/* ------------------------------------------------------------------ */
+
+static void on_button_long_press(void *user)
+{
+    (void)user;
+    static volatile bool fired = false;
+    if (fired) return;
+    fired = true;
+    ESP_LOGW(TAG, "BOOT long-press — factory reset");
+    if (app_display_lock(100)) {
+        ui_dashboard_show_error("Factory reset");
+        app_display_unlock();
+    }
+    vTaskDelay(pdMS_TO_TICKS(700));
+    app_config_factory_reset();
 }
 
 /* ------------------------------------------------------------------ */
@@ -179,7 +207,13 @@ static void poll_loop(void)
         uint8_t cnt = app_config_get_account_count();
         if (cnt == 0) {
             if (app_display_lock(0)) {
-                ui_dashboard_show_error("No accounts — open\nclaude-dashboard.local");
+                char ip[20] = {0};
+                char buf[128];
+                if (app_wifi_get_ip_str(ip, sizeof(ip)) && ip[0])
+                    snprintf(buf, sizeof(buf), "Open in browser:\nclaude-dashboard.local\n%s", ip);
+                else
+                    snprintf(buf, sizeof(buf), "Open in browser:\nclaude-dashboard.local");
+                ui_dashboard_show_info("No accounts yet", buf);
                 app_display_unlock();
             }
             vTaskDelay(pdMS_TO_TICKS(2000));
@@ -297,6 +331,7 @@ void app_main(void)
 
     /* 3. Touch */
     ESP_ERROR_CHECK(app_touch_start(on_touch, NULL));
+    ESP_ERROR_CHECK(app_button_start(on_button_long_press, NULL));
 
     /* 4. WiFi common */
     ESP_ERROR_CHECK(app_wifi_common_init());

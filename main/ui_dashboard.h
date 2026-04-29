@@ -32,11 +32,15 @@ void ui_dashboard_show_connecting(const char *ssid);
 /* Show overlay: connection failed / error */
 void ui_dashboard_show_error(const char *msg);
 
+/* Show overlay: friendly setup info (Claude orange title) */
+void ui_dashboard_show_info(const char *title, const char *msg);
+
 /* Hide all overlays — return to normal dashboard */
 void ui_dashboard_hide_overlay(void);
 
 /* Long-press progress overlay — secs_remaining counts down. */
 void ui_dashboard_show_long_press(uint8_t secs_remaining);
+void ui_dashboard_show_long_press_msg(const char *msg, uint8_t secs_remaining);
 void ui_dashboard_hide_long_press(void);
 
 /* Set IP address shown in header (e.g. "192.168.1.123"). NULL or empty hides it. */

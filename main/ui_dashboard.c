@@ -388,13 +388,22 @@ void ui_dashboard_show_error(const char *msg)
     lv_obj_clear_flag(s_overlay, LV_OBJ_FLAG_HIDDEN);
 }
 
+void ui_dashboard_show_info(const char *title, const char *msg)
+{
+    ensure_overlay();
+    lv_label_set_text(s_overlay_lbl, title ? title : "Info");
+    lv_label_set_text(s_overlay_sub, msg ? msg : "");
+    lv_obj_set_style_text_color(s_overlay_lbl, lv_color_hex(0xD97757), 0);  /* Claude orange */
+    lv_obj_clear_flag(s_overlay, LV_OBJ_FLAG_HIDDEN);
+}
+
 void ui_dashboard_hide_overlay(void)
 {
     if (s_overlay) lv_obj_add_flag(s_overlay, LV_OBJ_FLAG_HIDDEN);
 }
 
 /* Long-press progress overlay (semi-transparent) */
-void ui_dashboard_show_long_press(uint8_t secs_remaining)
+void ui_dashboard_show_long_press_msg(const char *msg, uint8_t secs_remaining)
 {
     if (!s_long_overlay) {
         s_long_overlay = lv_obj_create(lv_scr_act());
@@ -413,7 +422,7 @@ void ui_dashboard_show_long_press(uint8_t secs_remaining)
         lv_obj_align(s_long_lbl, LV_ALIGN_CENTER, 0, 0);
     }
     char b[64];
-    snprintf(b, sizeof(b), "Hold for reset...\n%us", (unsigned)secs_remaining);
+    snprintf(b, sizeof(b), "%s\n%us", msg ? msg : "Hold", (unsigned)secs_remaining);
     lv_label_set_text(s_long_lbl, b);
     lv_obj_clear_flag(s_long_overlay, LV_OBJ_FLAG_HIDDEN);
 }
@@ -432,4 +441,10 @@ void ui_dashboard_set_ip(const char *ip)
     } else {
         lv_obj_add_flag(s_lbl_ip, LV_OBJ_FLAG_HIDDEN);
     }
+}
+
+/* Compatibility wrapper — defaults to "Hold to toggle cycle" message */
+void ui_dashboard_show_long_press(uint8_t secs_remaining)
+{
+    ui_dashboard_show_long_press_msg("Hold to toggle cycle", secs_remaining);
 }

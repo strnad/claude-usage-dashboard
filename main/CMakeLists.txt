@@ -11,6 +11,7 @@ idf_component_register(
           "ui_dashboard.c"
           "ui_setup.c"
           "app_sleep.c"
+          "app_button.c"
     INCLUDE_DIRS "."
     PRIV_REQUIRES esp_wifi nvs_flash esp_lcd driver esp_timer
                   esp_http_client esp_http_server esp-tls json
