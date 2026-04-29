@@ -23,7 +23,7 @@ void ui_dashboard_init(void);
 
 /* Update dashboard with fresh data + account info. */
 void ui_dashboard_update(uint8_t account_idx, uint8_t total_accounts,
-                        const char *label, const char *email,
+                        const char *label, const char *email, const char *tier,
                         const claude_usage_t *data, bool wifi_ok);
 
 /* Show overlay: "Connecting WiFi..." */

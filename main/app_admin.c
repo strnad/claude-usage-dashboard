@@ -8,6 +8,7 @@
 
 #include "app_admin.h"
 #include "app_config.h"
+#include "app_claude_api.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -267,6 +268,7 @@ static esp_err_t h_state(httpd_req_t *req)
         cJSON *o = cJSON_CreateObject();
         cJSON_AddStringToObject(o, "label", a.label);
         cJSON_AddStringToObject(o, "email", a.email);
+        cJSON_AddStringToObject(o, "tier", a.tier);
         cJSON_AddNumberToObject(o, "type", (double)a.type);
         cJSON_AddNumberToObject(o, "expires_ms", (double)a.expires_ms);
         cJSON_AddItemToArray(arr, o);
@@ -315,6 +317,23 @@ static esp_err_t h_acct_add(httpd_req_t *req)
         httpd_resp_set_type(req, "application/json");
         httpd_resp_send(req, "{\"ok\":false,\"error\":\"add failed\"}", HTTPD_RESP_USE_STRLEN);
         return ESP_OK;
+    }
+
+    /* Auto-fetch profile to populate tier (and email if blank) */
+    char fetched_email[APP_EMAIL_MAX_LEN] = {0};
+    char fetched_tier[APP_TIER_MAX_LEN]   = {0};
+    if (app_claude_api_fetch_profile(idx, fetched_email, sizeof(fetched_email),
+                                      fetched_tier, sizeof(fetched_tier)) == ESP_OK) {
+        app_account_t loaded;
+        if (app_config_get_account(idx, &loaded)) {
+            if (loaded.email[0] == 0 && fetched_email[0]) {
+                strncpy(loaded.email, fetched_email, sizeof(loaded.email) - 1);
+            }
+            if (fetched_tier[0]) {
+                strncpy(loaded.tier, fetched_tier, sizeof(loaded.tier) - 1);
+            }
+            app_config_set_account(idx, &loaded);
+        }
     }
 
     httpd_resp_set_type(req, "application/json");

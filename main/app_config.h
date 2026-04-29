@@ -23,6 +23,7 @@
 #define APP_MAX_ACCOUNTS      8
 
 #define APP_LABEL_MAX_LEN     32
+#define APP_TIER_MAX_LEN      16
 #define APP_EMAIL_MAX_LEN     64
 #define APP_TOKEN_MAX_LEN     2048   /* OAuth access tokens can be long */
 #define APP_REFRESH_MAX_LEN   512
@@ -37,6 +38,7 @@ typedef enum {
 typedef struct {
     char        label[APP_LABEL_MAX_LEN];
     char        email[APP_EMAIL_MAX_LEN];
+    char        tier[APP_TIER_MAX_LEN];  /* Pretty tier (e.g. "Max 20x") — auto-fetched */
     acct_type_t type;
     char        token[APP_TOKEN_MAX_LEN];
     char        refresh[APP_REFRESH_MAX_LEN];

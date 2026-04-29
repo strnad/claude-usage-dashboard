@@ -166,6 +166,8 @@ bool app_config_get_account(uint8_t idx, app_account_t *out)
     account_key(key, sizeof(key), idx, "exp");  nvs_get_i64(handle, key, &exp);
     out->expires_ms = exp;
 
+    account_key(key, sizeof(key), idx, "tir");  nvs_get_str_dyn(handle, key, out->tier, sizeof(out->tier));
+
     nvs_close(handle);
     return true;
 }
@@ -188,6 +190,8 @@ static esp_err_t write_account(uint8_t idx, const app_account_t *acct)
     ESP_RETURN_ON_ERROR(nvs_set_u8(handle, key, (uint8_t)acct->type), TAG, "set type");
     account_key(key, sizeof(key), idx, "exp");
     ESP_RETURN_ON_ERROR(nvs_set_i64(handle, key, acct->expires_ms), TAG, "set exp");
+    account_key(key, sizeof(key), idx, "tir");
+    ESP_RETURN_ON_ERROR(nvs_set_str(handle, key, acct->tier), TAG, "set tier");
 
     ESP_RETURN_ON_ERROR(nvs_commit(handle), TAG, "commit");
     nvs_close(handle);

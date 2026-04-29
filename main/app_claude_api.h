@@ -48,3 +48,6 @@ typedef struct {
 /* Fetch usage for the active account. Auto-refreshes OAuth tokens if expired.
  * On success, returns ESP_OK and fills *out. On failure, *out->valid=false. */
 esp_err_t app_claude_api_fetch(uint8_t account_idx, claude_usage_t *out);
+/* Fetch /api/oauth/profile — populates email + pretty tier (e.g. "Max 20x").
+   Both buffers must be at least 64+16 chars. */
+esp_err_t app_claude_api_fetch_profile(uint8_t account_idx, char *email_out, size_t email_len, char *tier_out, size_t tier_len);

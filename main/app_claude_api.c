@@ -323,3 +323,100 @@ esp_err_t app_claude_api_fetch(uint8_t account_idx, claude_usage_t *out)
 
     return parse_usage_response(out);
 }
+
+/* ------------------------------------------------------------------ */
+/* Profile fetch (account email + tier)                                */
+/* ------------------------------------------------------------------ */
+
+static void format_tier(const char *raw, char *out, size_t len)
+{
+    if (!raw || !*raw) { out[0] = 0; return; }
+    /* Strip "default_" prefix if present */
+    const char *p = raw;
+    if (strncmp(p, "default_", 8) == 0) p += 8;
+    /* Common patterns */
+    if (strstr(p, "claude_max_20x")) { snprintf(out, len, "Max 20x"); return; }
+    if (strstr(p, "claude_max_5x"))  { snprintf(out, len, "Max 5x");  return; }
+    if (strstr(p, "claude_max"))     { snprintf(out, len, "Max");     return; }
+    if (strstr(p, "claude_pro"))     { snprintf(out, len, "Pro");     return; }
+    if (strstr(p, "free"))           { snprintf(out, len, "Free");    return; }
+    /* Fallback: copy stripped name, replace _ with space, capitalize */
+    size_t i = 0;
+    bool cap = true;
+    while (*p && i < len - 1) {
+        char c = *p++;
+        if (c == '_') { out[i++] = ' '; cap = true; }
+        else if (cap) { out[i++] = (c >= 'a' && c <= 'z') ? (c - 32) : c; cap = false; }
+        else { out[i++] = c; }
+    }
+    out[i] = 0;
+}
+
+esp_err_t app_claude_api_fetch_profile(uint8_t account_idx, char *email_out, size_t email_len,
+                                        char *tier_out, size_t tier_len)
+{
+    if (email_out) email_out[0] = 0;
+    if (tier_out)  tier_out[0]  = 0;
+
+    app_account_t acct;
+    if (!app_config_get_account(account_idx, &acct)) return ESP_ERR_NOT_FOUND;
+
+    /* Refresh if needed */
+    if (acct.type == ACCT_TYPE_OAUTH) {
+        struct timeval tv; gettimeofday(&tv, NULL);
+        int64_t now_ms = (int64_t)tv.tv_sec * 1000LL + tv.tv_usec / 1000LL;
+        if (acct.expires_ms > 0 && acct.expires_ms - now_ms < 60000) {
+            (void)refresh_oauth_tokens(account_idx, &acct);
+        }
+    }
+
+    char auth_hdr[APP_TOKEN_MAX_LEN + 16];
+    snprintf(auth_hdr, sizeof(auth_hdr), "Bearer %s", acct.token);
+
+    s_resp_len = 0; s_resp_buf[0] = 0;
+    esp_http_client_config_t cfg = {
+        .url = "https://api.anthropic.com/api/oauth/profile",
+        .method = HTTP_METHOD_GET,
+        .timeout_ms = HTTP_TIMEOUT_MS,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .event_handler = http_event_handler,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (!client) return ESP_FAIL;
+    esp_http_client_set_header(client, "Authorization", auth_hdr);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_header(client, "User-Agent", USER_AGENT);
+    esp_http_client_set_header(client, "anthropic-beta", BETA_HEADER);
+
+    esp_err_t err = esp_http_client_perform(client);
+    int status = esp_http_client_get_status_code(client);
+    esp_http_client_cleanup(client);
+    if (err != ESP_OK) return err;
+    if (status != 200) {
+        ESP_LOGW(TAG, "Profile HTTP %d", status);
+        return ESP_FAIL;
+    }
+
+    cJSON *root = cJSON_Parse(s_resp_buf);
+    if (!root) return ESP_ERR_INVALID_RESPONSE;
+
+    cJSON *acc = cJSON_GetObjectItemCaseSensitive(root, "account");
+    if (cJSON_IsObject(acc) && email_out) {
+        cJSON *em = cJSON_GetObjectItemCaseSensitive(acc, "email");
+        if (cJSON_IsString(em) && em->valuestring) {
+            strncpy(email_out, em->valuestring, email_len - 1);
+            email_out[email_len - 1] = 0;
+        }
+    }
+    cJSON *org = cJSON_GetObjectItemCaseSensitive(root, "organization");
+    if (cJSON_IsObject(org) && tier_out) {
+        cJSON *t = cJSON_GetObjectItemCaseSensitive(org, "rate_limit_tier");
+        if (cJSON_IsString(t) && t->valuestring) {
+            format_tier(t->valuestring, tier_out, tier_len);
+        }
+    }
+    cJSON_Delete(root);
+    ESP_LOGI(TAG, "Profile: email=\"%s\" tier=\"%s\"",
+             email_out ? email_out : "", tier_out ? tier_out : "");
+    return ESP_OK;
+}

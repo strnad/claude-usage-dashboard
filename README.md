@@ -39,28 +39,31 @@ differs, check `dmesg | grep tty` after plugging it in.
 
 ## Adding an account
 
-You can authenticate each account with either an OAuth token pair (recommended
-for Claude.ai accounts using `claude` CLI) or a raw API key.
+This dashboard uses **OAuth tokens** from the Claude Code CLI — the same
+tokens it uses to read your real-time 5h / 7d usage limits. Console API keys
+are out of scope here: they do not expose `/api/oauth/usage` and report only
+spent credits, not the rate-limit windows this project displays.
 
-### OAuth (claude CLI)
+The Claude CLI stores tokens in `~/.claude/.credentials.json`. Extract them:
 
-The Claude CLI keeps tokens in `~/.claude/.credentials.json`. Extract them:
+**Linux / macOS:**
 
 ```bash
-python3 -c "import json; d = json.load(open('$HOME/.claude/.credentials.json'))['claudeAiOauth']; print('access:', d['accessToken']); print('refresh:', d['refreshToken']); print('expiresAt:', d['expiresAt'])"
+python3 -c "import json,os; d=json.load(open(os.path.expanduser('~/.claude/.credentials.json')))['claudeAiOauth']; print('access:', d['accessToken']); print('refresh:', d['refreshToken']); print('expiresAt:', d['expiresAt'])"
 ```
 
-Paste those values into the **OAuth** tab of the admin page. The device
-will refresh the access token automatically before it expires.
+**Windows (PowerShell):**
 
-### API key
+```powershell
+python -c "import json,os; d=json.load(open(os.path.expanduser('~/.claude/.credentials.json')))['claudeAiOauth']; print('access:', d['accessToken']); print('refresh:', d['refreshToken']); print('expiresAt:', d['expiresAt'])"
+```
 
-Sign in to <https://console.anthropic.com/settings/keys>, create a key, and
-paste it in the **API key** tab. (Note: API keys cannot read the same
-`/api/oauth/usage` endpoint — only OAuth-authenticated tokens can.
-The dashboard tries the same endpoint with the API key, but if that returns
-401 the display shows the error. For organization usage, OAuth is the
-practical path.)
+Paste the three values into the **OAuth** tab of the admin page (label,
+access token, refresh token, expires_at). The device will auto-refresh the
+access token before it expires and persist the new pair to NVS. The account
+tier (Pro / Max 5x / Max 20x) is fetched automatically from
+`/api/oauth/profile` and re-checked every 3 hours so plan changes show up
+on the dashboard without manual intervention.
 
 ## Touch
 

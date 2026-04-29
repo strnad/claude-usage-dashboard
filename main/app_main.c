@@ -46,6 +46,7 @@ static const char *TAG = "main";
 /* Currently displayed account index (separate from "active" — auto-cycle/tap can
  * temporarily change view without rewriting NVS each time). */
 static volatile uint8_t s_view_idx = 0;
+static int64_t s_last_tier_fetch[8] = {0};  /* unix ms per account */
 
 /* Timestamp of last user touch (ms). Auto-cycle pauses for 60s after a tap. */
 static volatile int64_t s_last_tap_ms = 0;
@@ -212,6 +213,35 @@ static void poll_loop(void)
             uint8_t idx = s_view_idx;
             ESP_LOGI(TAG, "Fetching usage for account[%u]", idx);
             esp_err_t err = app_claude_api_fetch(idx, &s_cache[idx]);
+
+            /* Auto-fetch tier: when empty, or every 3 hours to catch plan changes */
+            if (err == ESP_OK && idx < 8) {
+                app_account_t check;
+                if (app_config_get_account(idx, &check)) {
+                    struct timeval tv; gettimeofday(&tv, NULL);
+                    int64_t now_ms = (int64_t)tv.tv_sec * 1000LL;
+                    bool need = (check.tier[0] == 0) ||
+                                (s_last_tier_fetch[idx] == 0) ||
+                                (now_ms - s_last_tier_fetch[idx] > 3LL * 3600LL * 1000LL);
+                    if (need) {
+                        char fe[APP_EMAIL_MAX_LEN] = {0};
+                        char ft[APP_TIER_MAX_LEN]  = {0};
+                        if (app_claude_api_fetch_profile(idx, fe, sizeof(fe), ft, sizeof(ft)) == ESP_OK) {
+                            bool changed = false;
+                            if (check.email[0] == 0 && fe[0]) {
+                                strncpy(check.email, fe, sizeof(check.email)-1);
+                                changed = true;
+                            }
+                            if (ft[0] && strcmp(check.tier, ft) != 0) {
+                                strncpy(check.tier, ft, sizeof(check.tier)-1);
+                                changed = true;
+                            }
+                            if (changed) app_config_set_account(idx, &check);
+                            s_last_tier_fetch[idx] = now_ms;
+                        }
+                    }
+                }
+            }
             s_cache_age_ms[idx] = t;
             last_poll_ms = t;
             if (err != ESP_OK && !s_cache[idx].error_msg[0]) {
@@ -227,8 +257,7 @@ static void poll_loop(void)
         if (app_display_lock(100)) {
             ui_dashboard_hide_overlay();
             ui_dashboard_update(s_view_idx, cnt,
-                                have ? a.label : "(?)",
-                                have ? a.email : "",
+                                have ? a.label : "(?)", have ? a.email : "", have ? a.tier : "",
                                 &s_cache[s_view_idx],
                                 app_wifi_is_connected());
             app_display_unlock();

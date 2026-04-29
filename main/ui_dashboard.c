@@ -4,6 +4,7 @@
 
 #include "ui_dashboard.h"
 #include "app_display.h"
+#include "app_config.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -92,11 +93,11 @@ static void format_eta(int64_t resets_at_ms, char *out, size_t n)
     int hours = (int)((diff_s % 86400) / 3600);
     int mins = (int)((diff_s % 3600) / 60);
     if (days > 0) {
-        snprintf(out, n, "reset za %dd %dh", days, hours);
+        snprintf(out, n, "reset in %dd %dh", days, hours);
     } else if (hours > 0) {
-        snprintf(out, n, "reset za %dh %dm", hours, mins);
+        snprintf(out, n, "reset in %dh %dm", hours, mins);
     } else {
-        snprintf(out, n, "reset za %dm", mins);
+        snprintf(out, n, "reset in %dm", mins);
     }
 }
 
@@ -264,10 +265,16 @@ static void render_clock(void)
 }
 
 void ui_dashboard_update(uint8_t account_idx, uint8_t total_accounts,
-                        const char *label, const char *email,
+                        const char *label, const char *email, const char *tier,
                         const claude_usage_t *data, bool wifi_ok)
 {
-    if (s_lbl_label) lv_label_set_text(s_lbl_label, (label && label[0]) ? label : "(unnamed)");
+    if (s_lbl_label) {
+        char buf[APP_LABEL_MAX_LEN + APP_TIER_MAX_LEN + 4];
+        const char *l = (label && label[0]) ? label : "(unnamed)";
+        if (tier && tier[0]) snprintf(buf, sizeof(buf), "%s (%s)", l, tier);
+        else                  snprintf(buf, sizeof(buf), "%s", l);
+        lv_label_set_text(s_lbl_label, buf);
+    }
     if (s_lbl_email) {
         if (email && email[0]) {
             lv_label_set_text(s_lbl_email, email);
