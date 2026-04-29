@@ -75,31 +75,19 @@ static const char ADMIN_HTML[] =
 
 "<div class='card'><h2>Accounts</h2><div id='accts'></div></div>"
 
-"<div class='card'><h2>Add account</h2>"
-"<div class='tabs'>"
-"<div class='tab on' onclick=\"setTab('oauth')\" id='tab_oauth'>OAuth</div>"
-"<div class='tab' onclick=\"setTab('apikey')\" id='tab_apikey'>API key</div>"
-"</div>"
+"<div class='card'><h2>Add OAuth account</h2>"
 "<form id='addform'>"
-"<input type='hidden' name='type' id='atype' value='1'>"
 "<label>Label</label>"
 "<input name='label' required maxlength='31' placeholder='Personal / Work'>"
 "<label>Email (optional)</label>"
 "<input name='email' maxlength='63' placeholder='you@example.com'>"
-"<div id='oauth_fields'>"
-"<label>OAuth access token</label>"
+"<label>Access token</label>"
 "<textarea name='token' rows='3' placeholder='paste accessToken from ~/.claude/.credentials.json'></textarea>"
 "<label>Refresh token</label>"
 "<textarea name='refresh' rows='2' placeholder='paste refreshToken'></textarea>"
 "<label>Expires at (unix ms)</label>"
 "<input name='expires_ms' type='number' min='0' placeholder='0 = unknown'>"
 "<div class='muted'>From <code>~/.claude/.credentials.json</code> → claudeAiOauth.{accessToken, refreshToken, expiresAt}</div>"
-"</div>"
-"<div id='apikey_fields' style='display:none'>"
-"<label>API key</label>"
-"<input name='apikey' maxlength='2000' placeholder='sk-ant-api03-...'>"
-"<div class='muted'>From <a style='color:#a78bfa' href='https://console.anthropic.com/settings/keys'>console.anthropic.com</a></div>"
-"</div>"
 "<button class='add' type='submit'>Add account</button>"
 "</form></div>"
 
@@ -127,13 +115,6 @@ static const char ADMIN_HTML[] =
 "</div>"
 
 "<script>"
-"function setTab(t){"
-"  document.getElementById('tab_oauth').classList.toggle('on',t==='oauth');"
-"  document.getElementById('tab_apikey').classList.toggle('on',t==='apikey');"
-"  document.getElementById('oauth_fields').style.display=t==='oauth'?'block':'none';"
-"  document.getElementById('apikey_fields').style.display=t==='apikey'?'block':'none';"
-"  document.getElementById('atype').value=t==='oauth'?1:0;"
-"}"
 "async function load(){"
 "  const r=await fetch('/api/state');const s=await r.json();"
 "  document.getElementById('sub').textContent=`${s.accounts.length} account(s) | active: ${s.active+1} | wifi: ${s.wifi_ssid}`;"
@@ -141,8 +122,7 @@ static const char ADMIN_HTML[] =
 "  if(s.accounts.length===0){box.innerHTML='<div class=\"empty\">no accounts — add one below</div>';}"
 "  s.accounts.forEach((a,i)=>{"
 "    const div=document.createElement('div');div.className='acct'+(i===s.active?' active':'');"
-"    const tb=a.type===1?'<span class=\"badge oa\">OAuth</span>':'<span class=\"badge k\">API key</span>';"
-"    div.innerHTML=`<div class='info'><div class='lbl'>${escape_(a.label)} ${tb}</div>`"
+"    div.innerHTML=`<div class='info'><div class='lbl'>${escape_(a.label)}</div>`"
 "      +`<div class='meta'>${escape_(a.email||'(no email)')}</div></div>`"
 "      +`<button class='btn ${i===s.active?'act':''}' onclick='setActive(${i})'>${i===s.active?'active':'use'}</button>`"
 "      +`<button class='btn del' onclick='delAcc(${i})'>delete</button>`;"
@@ -162,10 +142,8 @@ static const char ADMIN_HTML[] =
 "async function factory(){if(!confirm('Factory reset — clears WiFi + ALL accounts. Continue?'))return;await postf('/api/factory_reset',{});alert('Resetting...');}"
 "document.getElementById('addform').addEventListener('submit',async e=>{"
 "  e.preventDefault();const f=e.target;const fd=new FormData(f);"
-"  const data={label:fd.get('label'),email:fd.get('email')||'',type:fd.get('type')};"
-"  if(data.type==='1'){data.token=fd.get('token');data.refresh=fd.get('refresh');data.expires_ms=fd.get('expires_ms')||'0';}"
-"  else{data.token=fd.get('apikey');data.refresh='';data.expires_ms='0';}"
-"  if(!data.token){alert('Token required');return;}"
+"  const data={label:fd.get('label'),email:fd.get('email')||'',token:fd.get('token'),refresh:fd.get('refresh'),expires_ms:fd.get('expires_ms')||'0'};"
+"  if(!data.token||!data.refresh){alert('Both access and refresh token required');return;}"
 "  const res=await postf('/api/account/add',data);"
 "  if(res.ok){f.reset();load();}else{alert(res.error||'failed');}"
 "});"
@@ -299,15 +277,15 @@ static esp_err_t h_acct_add(httpd_req_t *req)
     form_get(body, "email", a.email, sizeof(a.email));
     form_get(body, "token", a.token, sizeof(a.token));
     form_get(body, "refresh", a.refresh, sizeof(a.refresh));
-    form_get(body, "type", tbuf, sizeof(tbuf));
     form_get(body, "expires_ms", expbuf, sizeof(expbuf));
-    a.type = (atoi(tbuf) == 1) ? ACCT_TYPE_OAUTH : ACCT_TYPE_API_KEY;
+    (void)tbuf;
+    a.type = ACCT_TYPE_OAUTH;  /* OAuth-only — API keys not supported */
     a.expires_ms = (int64_t)atoll(expbuf);
     free(body);
 
-    if (a.label[0] == '\0' || a.token[0] == '\0') {
+    if (a.label[0] == '\0' || a.token[0] == '\0' || a.refresh[0] == '\0') {
         httpd_resp_set_type(req, "application/json");
-        httpd_resp_send(req, "{\"ok\":false,\"error\":\"label and token required\"}", HTTPD_RESP_USE_STRLEN);
+        httpd_resp_send(req, "{\"ok\":false,\"error\":\"label, access token and refresh token required\"}", HTTPD_RESP_USE_STRLEN);
         return ESP_OK;
     }
 
@@ -319,22 +297,8 @@ static esp_err_t h_acct_add(httpd_req_t *req)
         return ESP_OK;
     }
 
-    /* Auto-fetch profile to populate tier (and email if blank) */
-    char fetched_email[APP_EMAIL_MAX_LEN] = {0};
-    char fetched_tier[APP_TIER_MAX_LEN]   = {0};
-    if (app_claude_api_fetch_profile(idx, fetched_email, sizeof(fetched_email),
-                                      fetched_tier, sizeof(fetched_tier)) == ESP_OK) {
-        app_account_t loaded;
-        if (app_config_get_account(idx, &loaded)) {
-            if (loaded.email[0] == 0 && fetched_email[0]) {
-                strncpy(loaded.email, fetched_email, sizeof(loaded.email) - 1);
-            }
-            if (fetched_tier[0]) {
-                strncpy(loaded.tier, fetched_tier, sizeof(loaded.tier) - 1);
-            }
-            app_config_set_account(idx, &loaded);
-        }
-    }
+    /* Tier + email auto-fetch happens in the main poll loop (HTTPS handshake
+       needs 16 KB+ stack which the httpd worker does not have). */
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, "{\"ok\":true}", HTTPD_RESP_USE_STRLEN);

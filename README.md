@@ -41,8 +41,8 @@ differs, check `dmesg | grep tty` after plugging it in.
 
 This dashboard uses **OAuth tokens** from the Claude Code CLI — the same
 tokens it uses to read your real-time 5h / 7d usage limits. Console API keys
-are out of scope here: they do not expose `/api/oauth/usage` and report only
-spent credits, not the rate-limit windows this project displays.
+are not supported (they do not expose `/api/oauth/usage` and report only
+spent credits, not the rate-limit windows this project displays).
 
 The Claude CLI stores tokens in `~/.claude/.credentials.json`. Extract them:
 
@@ -58,8 +58,8 @@ python3 -c "import json,os; d=json.load(open(os.path.expanduser('~/.claude/.cred
 python -c "import json,os; d=json.load(open(os.path.expanduser('~/.claude/.credentials.json')))['claudeAiOauth']; print('access:', d['accessToken']); print('refresh:', d['refreshToken']); print('expiresAt:', d['expiresAt'])"
 ```
 
-Paste the three values into the **OAuth** tab of the admin page (label,
-access token, refresh token, expires_at). The device will auto-refresh the
+Paste the values into the admin page (label, access token, refresh token,
+expires_at). The device will auto-refresh the
 access token before it expires and persist the new pair to NVS. The account
 tier (Pro / Max 5x / Max 20x) is fetched automatically from
 `/api/oauth/profile` and re-checked every 3 hours so plan changes show up
