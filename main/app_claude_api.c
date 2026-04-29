@@ -28,7 +28,7 @@ static const char *TAG = "claude_api";
 #define OAUTH_CLIENT_ID "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
 #define HTTP_TIMEOUT_MS    15000
-#define RESPONSE_BUF_SIZE  4096
+#define RESPONSE_BUF_SIZE  8192
 
 static char s_resp_buf[RESPONSE_BUF_SIZE];
 static int  s_resp_len = 0;
@@ -41,7 +41,7 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
     switch (evt->event_id) {
     case HTTP_EVENT_ON_DATA:
-        if (!esp_http_client_is_chunked_response(evt->client) && evt->data_len > 0) {
+        if (evt->data_len > 0) {
             int copy = evt->data_len;
             if (s_resp_len + copy >= RESPONSE_BUF_SIZE - 1) {
                 copy = RESPONSE_BUF_SIZE - 1 - s_resp_len;

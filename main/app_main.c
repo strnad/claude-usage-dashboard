@@ -298,6 +298,15 @@ void app_main(void)
         }
     }
 
+    /* Show IP on dashboard header */
+    {
+        char ip_buf[20] = {0};
+        if (app_wifi_get_ip_str(ip_buf, sizeof(ip_buf)) && app_display_lock(0)) {
+            ui_dashboard_set_ip(ip_buf);
+            app_display_unlock();
+        }
+    }
+
     /* 7. mDNS + admin server */
     start_mdns();
     ESP_ERROR_CHECK(app_admin_start());

@@ -12,6 +12,8 @@
 #include "lvgl.h"
 #include "esp_log.h"
 
+extern const lv_img_dsc_t claude_logo;
+
 static const char *TAG = "ui";
 
 /* Color palette */
@@ -41,8 +43,10 @@ static lv_obj_t *s_long_overlay = NULL;
 static lv_obj_t *s_long_lbl     = NULL;
 
 /* Header */
+static lv_obj_t *s_img_logo    = NULL;
 static lv_obj_t *s_lbl_label   = NULL;
 static lv_obj_t *s_lbl_email   = NULL;
+static lv_obj_t *s_lbl_ip      = NULL;
 static lv_obj_t *s_lbl_wifi    = NULL;
 
 /* 5h block */
@@ -155,8 +159,16 @@ void ui_dashboard_init(void)
     lv_obj_clear_flag(s_root, LV_OBJ_FLAG_SCROLLABLE);
 
     /* Header strip 0..24 */
-    s_lbl_label = make_label(s_root, &lv_font_montserrat_16, CLR_TEXT, 8, 4, "—");
-    s_lbl_email = make_label(s_root, &lv_font_montserrat_12, CLR_TEXT_DIM, 8, 22, "");
+    s_img_logo = lv_img_create(s_root);
+    lv_img_set_src(s_img_logo, &claude_logo);
+    lv_obj_set_pos(s_img_logo, 6, 4);
+    s_lbl_label = make_label(s_root, &lv_font_montserrat_16, CLR_TEXT, 36, 4, "—");
+    s_lbl_email = make_label(s_root, &lv_font_montserrat_12, CLR_TEXT_DIM, 36, 22, "");
+    lv_obj_set_width(s_lbl_email, 160);
+    lv_label_set_long_mode(s_lbl_email, LV_LABEL_LONG_DOT);
+    s_lbl_ip = make_label(s_root, &lv_font_montserrat_12, CLR_TEXT_DIM, 170, 22, "");
+    lv_obj_set_width(s_lbl_ip, 138);
+    lv_obj_set_style_text_align(s_lbl_ip, LV_TEXT_ALIGN_RIGHT, 0);
     /* Hide email by default if blank */
     s_lbl_wifi  = make_label(s_root, &lv_font_montserrat_12, CLR_TEXT_DIM, 280, 6, LV_SYMBOL_WIFI);
 
@@ -402,4 +414,15 @@ void ui_dashboard_show_long_press(uint8_t secs_remaining)
 void ui_dashboard_hide_long_press(void)
 {
     if (s_long_overlay) lv_obj_add_flag(s_long_overlay, LV_OBJ_FLAG_HIDDEN);
+}
+
+void ui_dashboard_set_ip(const char *ip)
+{
+    if (!s_lbl_ip) return;
+    if (ip && ip[0]) {
+        lv_label_set_text(s_lbl_ip, ip);
+        lv_obj_clear_flag(s_lbl_ip, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_lbl_ip, LV_OBJ_FLAG_HIDDEN);
+    }
 }

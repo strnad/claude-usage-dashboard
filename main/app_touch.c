@@ -57,10 +57,11 @@ static void touch_task(void *arg)
         } else if (!now_pressed && was_pressed) {
             /* Release */
             if (!fired) {
-                if (held_ms >= DEBOUNCE_MS && held_ms < LONG_PRESS_MS) {
-                    if (s_cb) s_cb(APP_TOUCH_TAP, held_ms, s_user);
-                } else if (held_ms >= 500 && held_ms < LONG_PRESS_MS) {
+                if (held_ms >= 500 && held_ms < LONG_PRESS_MS) {
+                    /* Overlay was shown (PROGRESS fired at 500ms) — must hide it */
                     if (s_cb) s_cb(APP_TOUCH_RELEASED_BEFORE_FIRE, held_ms, s_user);
+                } else if (held_ms >= DEBOUNCE_MS && held_ms < 500) {
+                    if (s_cb) s_cb(APP_TOUCH_TAP, held_ms, s_user);
                 }
             }
             held_ms = 0;

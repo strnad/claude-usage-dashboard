@@ -22,3 +22,6 @@ const char *app_wifi_get_ap_ssid(void);
 
 /* Get RSSI of currently-connected AP. Returns 0 if not connected. */
 int       app_wifi_get_rssi(void);
+
+/* Get current STA IP as string. Returns true if connected, false otherwise. */
+bool      app_wifi_get_ip_str(char *out, size_t len);

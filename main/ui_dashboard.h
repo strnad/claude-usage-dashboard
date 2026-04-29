@@ -38,3 +38,6 @@ void ui_dashboard_hide_overlay(void);
 /* Long-press progress overlay — secs_remaining counts down. */
 void ui_dashboard_show_long_press(uint8_t secs_remaining);
 void ui_dashboard_hide_long_press(void);
+
+/* Set IP address shown in header (e.g. "192.168.1.123"). NULL or empty hides it. */
+void ui_dashboard_set_ip(const char *ip);

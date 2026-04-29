@@ -152,3 +152,16 @@ int app_wifi_get_rssi(void)
     if (esp_wifi_sta_get_ap_info(&info) == ESP_OK) return info.rssi;
     return 0;
 }
+
+bool app_wifi_get_ip_str(char *out, size_t len)
+{
+    if (!out || len < 8) return false;
+    out[0] = 0;
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (!netif) return false;
+    esp_netif_ip_info_t info;
+    if (esp_netif_get_ip_info(netif, &info) != ESP_OK) return false;
+    if (info.ip.addr == 0) return false;
+    snprintf(out, len, IPSTR, IP2STR(&info.ip));
+    return true;
+}
