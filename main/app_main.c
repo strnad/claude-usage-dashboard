@@ -23,6 +23,7 @@
 #include "app_button.h"
 #include "ui_dashboard.h"
 #include "ui_setup.h"
+#include "app_main.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -55,6 +56,22 @@ static volatile int64_t s_last_tap_ms = 0;
 
 /* If non-zero, force redraw on next poll iteration. */
 static volatile bool s_force_refresh = false;
+
+/* Per-account usage cache shared with admin /api/state. */
+static claude_usage_t s_cache[APP_MAX_ACCOUNTS];
+static int64_t        s_cache_age_ms[APP_MAX_ACCOUNTS] = {0};
+
+const claude_usage_t *app_main_get_cached_usage(uint8_t idx)
+{
+    if (idx >= APP_MAX_ACCOUNTS) return NULL;
+    return &s_cache[idx];
+}
+
+int64_t app_main_get_cache_age_ms(uint8_t idx)
+{
+    if (idx >= APP_MAX_ACCOUNTS) return 0;
+    return s_cache_age_ms[idx];
+}
 
 static int64_t now_ms(void)
 {
@@ -197,10 +214,6 @@ static void poll_loop(void)
     int64_t last_poll_ms = 0;
     int64_t last_cycle_ms = now_ms();
     uint8_t last_view = 0xFF;
-
-    /* Cache last fetched data per account so we can swap accounts without re-fetching */
-    static claude_usage_t s_cache[APP_MAX_ACCOUNTS];
-    static int64_t s_cache_age_ms[APP_MAX_ACCOUNTS] = {0};
 
     while (1) {
         int64_t t = now_ms();

@@ -9,6 +9,9 @@
 #include "app_admin.h"
 #include "app_config.h"
 #include "app_claude_api.h"
+#include "app_main.h"
+
+#include <sys/time.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -252,6 +255,9 @@ static esp_err_t h_state(httpd_req_t *req)
     cJSON_AddNumberToObject(root, "active", app_config_get_active_index());
     cJSON_AddStringToObject(root, "wifi_ssid", app_config_get_wifi_ssid());
 
+    struct timeval tv; gettimeofday(&tv, NULL);
+    int64_t now_ms = (int64_t)tv.tv_sec * 1000LL + tv.tv_usec / 1000LL;
+
     cJSON *arr = cJSON_AddArrayToObject(root, "accounts");
     uint8_t cnt = app_config_get_account_count();
     for (uint8_t i = 0; i < cnt; i++) {
@@ -263,6 +269,21 @@ static esp_err_t h_state(httpd_req_t *req)
         cJSON_AddStringToObject(o, "tier", a.tier);
         cJSON_AddNumberToObject(o, "type", (double)a.type);
         cJSON_AddNumberToObject(o, "expires_ms", (double)a.expires_ms);
+
+        const claude_usage_t *u = app_main_get_cached_usage(i);
+        if (u) {
+            cJSON_AddBoolToObject(o, "valid", u->valid);
+            cJSON_AddStringToObject(o, "error", u->error_msg);
+            int64_t age = app_main_get_cache_age_ms(i);
+            cJSON_AddNumberToObject(o, "cache_age_s", age ? (double)((now_ms - age) / 1000) : -1.0);
+            int64_t cd_left = u->rate_limited_until_ms - now_ms;
+            cJSON_AddNumberToObject(o, "rate_limit_s_left", cd_left > 0 ? (double)(cd_left / 1000) : 0.0);
+            if (u->valid) {
+                cJSON_AddNumberToObject(o, "five_h_util", u->five_h_util);
+                cJSON_AddNumberToObject(o, "seven_d_util", u->seven_d_util);
+            }
+        }
+
         cJSON_AddItemToArray(arr, o);
     }
 
