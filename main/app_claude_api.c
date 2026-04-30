@@ -300,6 +300,16 @@ esp_err_t app_claude_api_fetch(uint8_t account_idx, claude_usage_t *out)
     int status = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
 
+    /* esp_http_client_perform() returns ESP_ERR_NOT_SUPPORTED on HTTP 401
+       when the server's WWW-Authenticate header isn't Basic/Digest. Anthropic
+       uses Bearer, so this is just "token rejected" — funnel it into the
+       existing 401 refresh-and-retry path instead of bailing out. */
+    if (err == ESP_ERR_NOT_SUPPORTED) {
+        ESP_LOGW(TAG, "transport NOT_SUPPORTED — likely 401 with Bearer challenge; retrying via refresh");
+        err = ESP_OK;
+        status = 401;
+    }
+
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Usage transport failed: %s", esp_err_to_name(err));
         snprintf(out->error_msg, sizeof(out->error_msg), "%s", esp_err_to_name(err));
