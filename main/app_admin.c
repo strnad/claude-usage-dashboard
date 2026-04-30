@@ -91,6 +91,15 @@ static const char ADMIN_HTML[] =
 "<button class='add' type='submit'>Add account</button>"
 "</form></div>"
 
+"<div class='card'><h2>Polling</h2>"
+"<form id='pollform' class='inline'>"
+"<label style='display:inline;margin:0;text-transform:none'>Fetch Claude usage every</label>"
+"<input name='interval' type='number' min='60' max='3600' style='width:90px;margin:0 6px'>seconds"
+"<button class='btn act' type='submit' style='margin-left:auto'>Save</button>"
+"</form>"
+"<div class='muted'>Anthropic's public usage API rate-limits aggressively (~4 req per 5 min, then 5+ min cooldown). 300 s (5 min) is a safe default; 60 s minimum.</div>"
+"</div>"
+
 "<div class='card'><h2>Auto-cycle</h2>"
 "<form id='cycleform' class='inline'>"
 "<input type='checkbox' name='enabled' id='cycle_en' style='width:auto'><label style='display:inline;margin:0 0 0 6px;text-transform:none'>Cycle through accounts every</label>"
@@ -128,6 +137,7 @@ static const char ADMIN_HTML[] =
 "      +`<button class='btn del' onclick='delAcc(${i})'>delete</button>`;"
 "    box.appendChild(div);"
 "  });"
+"  document.querySelector('#pollform [name=interval]').value=s.poll_interval;"
 "  document.getElementById('cycle_en').checked=s.cycle_enabled;"
 "  document.querySelector('#cycleform [name=interval]').value=s.cycle_interval;"
 "  document.getElementById('sleep_en').checked=s.sleep_enabled;"
@@ -146,6 +156,10 @@ static const char ADMIN_HTML[] =
 "  if(!data.token||!data.refresh){alert('Both access and refresh token required');return;}"
 "  const res=await postf('/api/account/add',data);"
 "  if(res.ok){f.reset();load();}else{alert(res.error||'failed');}"
+"});"
+"document.getElementById('pollform').addEventListener('submit',async e=>{"
+"  e.preventDefault();const fd=new FormData(e.target);"
+"  await postf('/api/poll',{interval:fd.get('interval')});load();"
 "});"
 "document.getElementById('cycleform').addEventListener('submit',async e=>{"
 "  e.preventDefault();const fd=new FormData(e.target);"
@@ -254,6 +268,7 @@ static esp_err_t h_state(httpd_req_t *req)
 
     cJSON_AddBoolToObject(root, "cycle_enabled", app_config_get_cycle_enabled());
     cJSON_AddNumberToObject(root, "cycle_interval", app_config_get_cycle_interval());
+    cJSON_AddNumberToObject(root, "poll_interval", app_config_get_poll_interval());
     cJSON_AddBoolToObject(root, "sleep_enabled", app_config_get_sleep_enabled());
     cJSON_AddNumberToObject(root, "sleep_start_h", app_config_get_sleep_start_h());
     cJSON_AddNumberToObject(root, "sleep_end_h", app_config_get_sleep_end_h());
@@ -353,6 +368,21 @@ static esp_err_t h_cycle(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t h_poll(httpd_req_t *req)
+{
+    char *body = recv_body(req, 256);
+    if (!body) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad body"); return ESP_FAIL; }
+    char ib[12];
+    form_get(body, "interval", ib, sizeof(ib));
+    free(body);
+    int sec = atoi(ib);
+    if (sec <= 0) sec = 300;
+    app_config_set_poll_interval((uint16_t)sec);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, "{\"ok\":true}", HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
 static esp_err_t h_sleep(httpd_req_t *req)
 {
     char *body = recv_body(req, 256);
@@ -403,7 +433,7 @@ static esp_err_t h_factory(httpd_req_t *req)
 esp_err_t app_admin_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-    cfg.max_uri_handlers = 12;
+    cfg.max_uri_handlers = 14;
     cfg.lru_purge_enable = true;
     cfg.stack_size = 8192;
     cfg.recv_wait_timeout = 10;
@@ -418,6 +448,7 @@ esp_err_t app_admin_start(void)
         { .uri = "/api/account/del",     .method = HTTP_POST, .handler = h_acct_del    },
         { .uri = "/api/account/active",  .method = HTTP_POST, .handler = h_acct_active },
         { .uri = "/api/cycle",           .method = HTTP_POST, .handler = h_cycle       },
+        { .uri = "/api/poll",            .method = HTTP_POST, .handler = h_poll        },
         { .uri = "/api/sleep",           .method = HTTP_POST, .handler = h_sleep       },
         { .uri = "/api/reboot",          .method = HTTP_POST, .handler = h_reboot      },
         { .uri = "/api/factory_reset",   .method = HTTP_POST, .handler = h_factory     },

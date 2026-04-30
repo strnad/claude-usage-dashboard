@@ -43,6 +43,9 @@ typedef struct {
 
     /* Last error message (for display when valid=false) */
     char    error_msg[64];
+
+    /* Set when a 429 was observed; main loop must not refetch before this time. */
+    int64_t rate_limited_until_ms;
 } claude_usage_t;
 
 /* Fetch usage for the active account. Auto-refreshes OAuth tokens if expired.

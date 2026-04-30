@@ -79,6 +79,12 @@ bool        app_config_get_cycle_enabled(void);
 uint16_t    app_config_get_cycle_interval(void);
 esp_err_t   app_config_set_cycle(bool enabled, uint16_t seconds);
 
+/* Poll interval — seconds between Claude API fetches.
+   Anthropic's public OAuth usage endpoint rate-limits aggressively
+   (~4 req per 5 min, then 5+ min cooldown). Default 300s, min 60, max 3600. */
+uint16_t    app_config_get_poll_interval(void);
+esp_err_t   app_config_set_poll_interval(uint16_t seconds);
+
 /* Sleep schedule */
 bool        app_config_get_sleep_enabled(void);
 uint8_t     app_config_get_sleep_start_h(void);

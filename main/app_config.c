@@ -21,6 +21,7 @@ static uint8_t  s_acct_count   = 0;
 static uint8_t  s_acct_active  = 0;
 static bool     s_cycle_enabled  = true;
 static uint16_t s_cycle_interval = 30;
+static uint16_t s_poll_interval  = 300;   /* seconds; 5 min default */
 static bool     s_sleep_enabled = true;
 static uint8_t  s_sleep_start_h = 23;
 static uint8_t  s_sleep_end_h   = 7;
@@ -80,11 +81,15 @@ esp_err_t app_config_init(void)
     nvs_get_u8(handle, "sleep_sh", &s_sleep_start_h);
     nvs_get_u8(handle, "sleep_eh", &s_sleep_end_h);
 
+    nvs_get_u16(handle, "poll_int", &s_poll_interval);
+
     nvs_close(handle);
 
     if (s_acct_count > APP_MAX_ACCOUNTS) s_acct_count = APP_MAX_ACCOUNTS;
     if (s_acct_active >= s_acct_count && s_acct_count > 0) s_acct_active = 0;
     if (s_cycle_interval == 0) s_cycle_interval = 30;
+    if (s_poll_interval < 60)   s_poll_interval = 300;
+    if (s_poll_interval > 3600) s_poll_interval = 3600;
     if (s_sleep_start_h > 23) s_sleep_start_h = 23;
     if (s_sleep_end_h > 23) s_sleep_end_h = 7;
 
@@ -310,6 +315,22 @@ esp_err_t app_config_set_cycle(bool enabled, uint16_t seconds)
     nvs_close(handle);
     s_cycle_enabled  = enabled;
     s_cycle_interval = seconds;
+    return ESP_OK;
+}
+
+uint16_t app_config_get_poll_interval(void) { return s_poll_interval; }
+
+esp_err_t app_config_set_poll_interval(uint16_t seconds)
+{
+    if (seconds < 60)   seconds = 60;
+    if (seconds > 3600) seconds = 3600;
+
+    nvs_handle_t handle;
+    ESP_RETURN_ON_ERROR(nvs_open(APP_NVS_NAMESPACE, NVS_READWRITE, &handle), TAG, "nvs_open");
+    nvs_set_u16(handle, "poll_int", seconds);
+    ESP_RETURN_ON_ERROR(nvs_commit(handle), TAG, "commit");
+    nvs_close(handle);
+    s_poll_interval = seconds;
     return ESP_OK;
 }
 

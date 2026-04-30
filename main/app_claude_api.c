@@ -32,14 +32,21 @@ static const char *TAG = "claude_api";
 
 static char s_resp_buf[RESPONSE_BUF_SIZE];
 static int  s_resp_len = 0;
+static int  s_retry_after_seconds = 0;
 
 /* ------------------------------------------------------------------ */
-/* HTTP event handler — collect body                                   */
+/* HTTP event handler — collect body + Retry-After                     */
 /* ------------------------------------------------------------------ */
 
 static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
     switch (evt->event_id) {
+    case HTTP_EVENT_ON_HEADER:
+        if (evt->header_key && evt->header_value &&
+            strcasecmp(evt->header_key, "Retry-After") == 0) {
+            s_retry_after_seconds = atoi(evt->header_value);
+        }
+        break;
     case HTTP_EVENT_ON_DATA:
         if (evt->data_len > 0) {
             int copy = evt->data_len;
@@ -269,6 +276,7 @@ esp_err_t app_claude_api_fetch(uint8_t account_idx, claude_usage_t *out)
 
     s_resp_len = 0;
     s_resp_buf[0] = '\0';
+    s_retry_after_seconds = 0;
 
     esp_http_client_config_t cfg = {
         .url = USAGE_URL,
@@ -304,6 +312,7 @@ esp_err_t app_claude_api_fetch(uint8_t account_idx, claude_usage_t *out)
         if (rerr == ESP_OK) {
             snprintf(auth_hdr, sizeof(auth_hdr), "Bearer %s", acct.token);
             s_resp_len = 0; s_resp_buf[0] = '\0';
+            s_retry_after_seconds = 0;
             client = esp_http_client_init(&cfg);
             esp_http_client_set_header(client, "Authorization", auth_hdr);
             esp_http_client_set_header(client, "Content-Type", "application/json");
@@ -315,6 +324,20 @@ esp_err_t app_claude_api_fetch(uint8_t account_idx, claude_usage_t *out)
         }
     }
 
+    if (status == 429) {
+        struct timeval tv; gettimeofday(&tv, NULL);
+        int64_t now = (int64_t)tv.tv_sec * 1000LL + tv.tv_usec / 1000LL;
+        /* Honor Retry-After; fallback 600 s if server omits it.
+           Add a small slack so we don't probe the exact second the window opens. */
+        int retry_s = s_retry_after_seconds > 0 ? s_retry_after_seconds : 600;
+        retry_s += 15;
+        out->rate_limited_until_ms = now + (int64_t)retry_s * 1000LL;
+        int mins = (retry_s + 59) / 60;
+        snprintf(out->error_msg, sizeof(out->error_msg),
+                 "Rate limited (%dm)", mins);
+        ESP_LOGW(TAG, "429 — backing off %d s", retry_s);
+        return ESP_FAIL;
+    }
     if (status != 200) {
         ESP_LOGE(TAG, "Usage HTTP %d (body: %.200s)", status, s_resp_buf);
         snprintf(out->error_msg, sizeof(out->error_msg), "HTTP %d", status);

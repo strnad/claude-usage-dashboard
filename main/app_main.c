@@ -41,7 +41,8 @@
 
 static const char *TAG = "main";
 
-#define POLL_INTERVAL_MS         30000
+/* Poll interval is now configurable via NVS (default 300 s — see app_config).
+   Anthropic's public OAuth usage endpoint rate-limits aggressively. */
 #define INITIAL_FAIL_RETRY_MS    5000
 
 /* Currently displayed account index (separate from "active" — auto-cycle/tap can
@@ -236,11 +237,16 @@ static void poll_loop(void)
         if (s_view_idx >= cnt) s_view_idx = 0;
 
         /* Fetch fresh data for the active view if we don't have cached data
-         * younger than POLL_INTERVAL_MS, or if view changed. */
-        bool need_fetch = (t - last_poll_ms) >= POLL_INTERVAL_MS;
+         * younger than poll_ms, or if view changed. Honor any active rate-limit
+         * cooldown returned by a previous 429 response. */
+        int64_t poll_ms = (int64_t)app_config_get_poll_interval() * 1000LL;
+        bool need_fetch = (t - last_poll_ms) >= poll_ms;
         if (view_changed) {
             int64_t age = t - s_cache_age_ms[s_view_idx];
-            if (age > POLL_INTERVAL_MS) need_fetch = true;
+            if (age > poll_ms) need_fetch = true;
+        }
+        if (need_fetch && s_cache[s_view_idx].rate_limited_until_ms > t) {
+            need_fetch = false;
         }
 
         if (need_fetch) {
